@@ -1,10 +1,8 @@
 # nat_data
 
-# Configuração do ambiente
-python3 -m venv venv
-source venv/bin/activate   # Linux/macOS
-# ou
-venv\Scripts\activate      # Windows
+# Instalar wsl powershell windows
+wsl --install
 
-pip install -r requirements.txt
-playwright install
+# Rodar na WSL 
+chmod +x install.sh
+./install.sh
