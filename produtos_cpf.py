@@ -33,40 +33,12 @@ PARAMS_BASE = {
 # ── LOGIN ────────────────────────────────────────────────────────────────────
 
 def fazer_login() -> dict:
-    """Abre o Brave via CDP, loga e retorna cookies prontos pro httpx."""
-    print("Conectando ao Brave...")
+    print("Conectando ao browser existente...")
+
     with sync_playwright() as p:
         browser = p.chromium.connect_over_cdp("http://localhost:9222")
         context = browser.contexts[0]
-        page = context.new_page()
 
-        print("Navegando para página de login...")
-        page.goto(
-            "https://www.natura.com.br/login?redirect=%2F&origin=menu",
-            wait_until="domcontentloaded"
-        )
-        page.wait_for_selector("#login-field", timeout=20000, state="visible")
-
-        page.click("#login-field")
-        page.wait_for_timeout(500)
-        for char in EMAIL:
-            page.keyboard.type(char, delay=80)
-
-        page.wait_for_timeout(800)
-        page.click("#login-password")
-        page.wait_for_timeout(500)
-        for char in PASSWORD:
-            page.keyboard.type(char, delay=80)
-
-        page.wait_for_timeout(1000)
-        page.click('button[type="submit"]')
-        print("Aguardando sessão ser estabelecida...")
-        page.wait_for_timeout(8000)
-
-        # Salva state.json para reuso futuro
-        context.storage_state(path="state.json")
-
-        # Converte cookies do Playwright → formato httpx
         cookies_raw = context.cookies()
         cookies = {
             c["name"]: c["value"]
@@ -74,7 +46,13 @@ def fazer_login() -> dict:
             if "natura" in c["domain"]
         }
 
-        print(f"✅ Login ok! {len(cookies)} cookies capturados.")
+        if not cookies:
+            print("❌ Nenhum cookie encontrado. Faça login manual primeiro.")
+            exit(1)
+
+        context.storage_state(path="state.json")
+
+        print(f"✅ Cookies capturados: {len(cookies)}")
         return cookies
 
 
@@ -197,6 +175,29 @@ def fetch_all(cookies: dict):
 
     return all_products
 
+def save_xlsx(produtos):
+    print("Salvando XLSX...")
+
+    # diretório do projeto
+    base_dir = Path(__file__).resolve().parent
+    data_dir = base_dir / "data"
+    data_dir.mkdir(exist_ok=True)
+
+    arquivo = data_dir / "produtos_cpf.xlsx"
+
+    df = pd.DataFrame(produtos)
+
+    # remove duplicados por id (mais seguro que drop geral)
+    if "id" in df.columns:
+        df = df.drop_duplicates(subset=["id"])
+
+    try:
+        df.to_excel(arquivo, index=False, engine="openpyxl")
+    except Exception as e:
+        print(f"ERRO_SALVAR: {e}")
+        exit(1)
+
+    print(f"SUCESSO: {arquivo}")
 
 # ── MAIN ─────────────────────────────────────────────────────────────────────
 
@@ -204,6 +205,7 @@ def main():
     cookies = obter_cookies()
     produtos = fetch_all(cookies)
     print(f"\nTotal coletado: {len(produtos)} produtos")
+    save_xlsx(produtos)
     save_json(produtos)
 
 
